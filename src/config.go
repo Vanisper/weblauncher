@@ -15,6 +15,7 @@ import (
 var defaultConfig []byte
 
 type Config struct {
+	Static    bool   `json:"-"` // 是否启用静态配置（不生成外置文件，也不监控）
 	Title     string `json:"title"`
 	URL       string `json:"url"`
 	Icon      string `json:"icon"` // 外置图标路径（空则使用内嵌）
@@ -29,8 +30,9 @@ type Config struct {
 	onChange func(*Config) // 变更回调
 }
 
-func LoadConfig() (*Config, error) {
+func LoadConfig(isStatic bool) (*Config, error) {
 	c := &Config{
+		Static:    isStatic,
 		Title:     "WebLauncher",
 		URL:       "https://www.example.com",
 		AutoStart: false,
@@ -40,6 +42,11 @@ func LoadConfig() (*Config, error) {
 	// 解析内嵌默认配置
 	if err := json.Unmarshal(defaultConfig, c); err != nil {
 		return nil, err
+	}
+
+	// 静态配置模式
+	if c.Static {
+		return c, nil
 	}
 
 	// 确定外置配置路径
@@ -73,6 +80,17 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return c, nil
+}
+
+func (c *Config) SetStatic(val bool) {
+	c.mu.Lock()
+	c.Static = val
+	c.mu.Unlock()
+	if val {
+		c.StopWatching()
+	} else {
+		c.StartWatching()
+	}
 }
 
 func (c *Config) GetTitle() string {

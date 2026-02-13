@@ -13,8 +13,9 @@ import (
 var embeddedIcon []byte
 
 var (
-	trayMode = flag.Bool("tray", false, "强制托盘模式")
-	openOnce = flag.Bool("open", false, "仅打开浏览器并退出")
+	trayMode     = flag.Bool("tray", false, "强制托盘模式")
+	openOnce     = flag.Bool("open", false, "仅打开浏览器并退出")
+	staticConfig = flag.Bool("static", true, "启用静态配置（不生成外部配置，同时不监控、采用外部配置）")
 )
 
 var (
@@ -26,7 +27,7 @@ func main() {
 	flag.Parse()
 
 	var err error
-	config, err = LoadConfig()
+	config, err = LoadConfig(*staticConfig)
 	if err != nil {
 		fmt.Println("加载配置失败:", err)
 		os.Exit(1)
@@ -49,9 +50,11 @@ func main() {
 	// 应用自启设置
 	config.applyAutoStart()
 
-	// 启动配置热重载
-	config.StartWatching()
-	defer config.StopWatching()
+	if !config.Static {
+		// 启动配置热重载
+		config.StartWatching()
+		defer config.StopWatching()
+	}
 
 	systray.Run(onReady, onExit)
 }
@@ -75,6 +78,9 @@ func onReady() {
 	})
 
 	menuAuto = systray.AddMenuItemCheckbox("开机自启", "Auto start on boot", config.GetAutoStart())
+	if config.Static { // 静态模式不允许修改自启设置
+		menuAuto.Disable()
+	}
 	menuAuto.Click(func() {
 		newState := !config.GetAutoStart()
 		config.SetAutoStart(newState)
