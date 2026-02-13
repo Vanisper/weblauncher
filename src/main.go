@@ -108,6 +108,9 @@ func onReady() {
 			menuAuto.Uncheck()
 		}
 	})
+
+	// 启动时自动打开浏览器
+	openBrowser(config.GetURL())
 }
 
 func onExit() {
