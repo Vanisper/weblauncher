@@ -1,0 +1,7 @@
+{
+  "title": "WebLauncher",
+  "url": "https://www.example.com",
+  "icon": "",
+  "autoStart": false,
+  "trayMode": true
+}
