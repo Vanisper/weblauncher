@@ -26,7 +26,19 @@ var (
 func main() {
 	flag.Parse()
 
-	var err error
+	// 单例检查 - 防止程序重复运行
+	singleton, err := NewSingleton("WebLauncher_SingleInstance")
+	if err != nil {
+		// 程序已在运行，尝试通知它打开 URL
+		if sendErr := sendOpenURLCommand(); sendErr != nil {
+			fmt.Println("程序已在运行，但无法通知打开 URL:", sendErr)
+		} else {
+			fmt.Println("程序已在运行，已通知打开 URL")
+		}
+		os.Exit(0)
+	}
+	defer singleton.Release()
+
 	config, err = LoadConfig(*staticConfig)
 	if err != nil {
 		fmt.Println("加载配置失败:", err)
@@ -49,6 +61,16 @@ func main() {
 
 	// 应用自启设置
 	config.applyAutoStart()
+
+	// 启动 IPC 服务（在 systray 之前启动，以便接收新实例的命令）
+	go func() {
+		// 等待配置加载完成（main 函数中已加载）
+		if err := startIPCServer(func() {
+			openBrowser(config.GetURL())
+		}); err != nil {
+			fmt.Println("IPC 服务启动失败:", err)
+		}
+	}()
 
 	if !config.Static {
 		// 启动配置热重载
