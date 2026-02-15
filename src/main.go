@@ -15,7 +15,7 @@ var embeddedIcon []byte
 var (
 	trayMode     = flag.Bool("tray", false, "强制托盘模式")
 	openOnce     = flag.Bool("open", false, "仅打开浏览器并退出")
-	staticConfig = flag.Bool("static", true, "启用静态配置（不生成外部配置，同时不监控、采用外部配置）")
+	staticConfig = flag.Bool("static", false, "启用静态配置（不生成外部配置，同时不监控、采用外部配置）")
 )
 
 var (
