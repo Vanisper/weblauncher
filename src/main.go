@@ -47,12 +47,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 确定全局数据目录（exe 旁边 > APPDATA > TEMP）
-	if err := DetermineDataDir(config.GetTitle()); err != nil {
-		fmt.Fprintf(os.Stderr, "致命错误：无法确定数据目录: %v\n", err)
-		os.Exit(1)
-	}
-
 	// 初始化日志（输出到数据目录）
 	logFile := filepath.Join(DataDir, "app.log")
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)

@@ -16,12 +16,13 @@ import (
 //go:embed assets/config.json
 var defaultConfig []byte
 
-// 全局数据目录（在程序启动时确定）
+// 全局数据基础目录
+var DataBaseDir string
 var DataDir string
 
 // DetermineDateDir 确定程序数据目录
 // 优先选择：可执行程序目录 > APPDATA > TEMP
-func DetermineDataDir(name string) error {
+func DetermineDataDir() error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("无法获取可执行程序路径: %w", err)
@@ -31,21 +32,21 @@ func DetermineDataDir(name string) error {
 
 	// 优先选择：程序目录
 	if err := testAndCreateDir(exeDir); err == nil {
-		DataDir = exeDir
+		DataDir = filepath.Dir(exeDir)
 		return nil
 	}
 
 	// 次选择：APPDATA
-	appDataDir := filepath.Join(os.Getenv("APPDATA"), name)
+	appDataDir, _ := filepath.Abs(os.Getenv("APPDATA"))
 	if err := testAndCreateDir(appDataDir); err == nil {
-		DataDir = appDataDir
+		DataBaseDir = appDataDir
 		return nil
 	}
 
 	// 最后选择：TEMP
-	tempDir := filepath.Join(os.TempDir(), name)
+	tempDir, _ := filepath.Abs(os.TempDir())
 	if err := testAndCreateDir(tempDir); err == nil {
-		DataDir = tempDir
+		DataBaseDir = tempDir
 		return nil
 	}
 
@@ -107,6 +108,20 @@ func LoadConfig(isStatic bool) (*Config, error) {
 		return c, nil
 	}
 
+	// 确定全局数据目录（exe 旁边 > APPDATA > TEMP）
+	if err := DetermineDataDir(); err != nil {
+		fmt.Fprintf(os.Stderr, "致命错误：无法确定数据目录: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 如果全局数据目录未设置但基础目录可用，使用基础目录加程序名作为数据目录
+	if DataDir == "" && DataBaseDir != "" {
+		DataDir = filepath.Join(DataBaseDir, c.GetTitle())
+	}
+	// 确保数据目录存在
+	if err := os.MkdirAll(DataDir, 0755); err != nil {
+		return nil, fmt.Errorf("无法创建数据目录: %w", err)
+	}
 	// 使用全局数据目录
 	c.dir = DataDir
 	c.path = filepath.Join(c.dir, "config.json")
