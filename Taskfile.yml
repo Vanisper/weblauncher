@@ -1,0 +1,39 @@
+# https://taskfile.dev
+version: '3'
+
+tasks:
+  default:
+    desc: 显示可用任务
+    cmds:
+      - task --list
+
+  init:
+    desc: 初始化项目（复制 .env.example 到 .env）
+    cmds:
+      - powershell -ExecutionPolicy Bypass -File scripts/init.ps1
+
+  build:
+    desc: 构建应用程序（仅 exe）
+    cmds:
+      - go run cmd/build/main.go -clean
+
+  release:
+    desc: 构建完整发布包（exe + 安装器）
+    cmds:
+      - go run cmd/build/main.go -release -clean
+
+  clean:
+    desc: 清理构建文件
+    cmds:
+      - go run cmd/build/main.go -only-clean
+
+  run:
+    desc: 开发模式运行
+    dir: src
+    cmds:
+      - go run .
+
+  new-guid:
+    desc: 生成新的 GUID
+    cmds:
+      - powershell -Command "[guid]::NewGuid().ToString()"
