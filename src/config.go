@@ -3,16 +3,74 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
 
 //go:embed assets/config.json
 var defaultConfig []byte
+
+// 全局数据目录（在程序启动时确定）
+var DataDir string
+
+// DetermineDateDir 确定程序数据目录
+// 优先选择：可执行程序目录 > APPDATA > TEMP
+func DetermineDataDir(name string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("无法获取可执行程序路径: %w", err)
+	}
+
+	exeDir := filepath.Dir(exe)
+
+	// 优先选择：程序目录
+	if err := testAndCreateDir(exeDir); err == nil {
+		DataDir = exeDir
+		return nil
+	}
+
+	// 次选择：APPDATA
+	appDataDir := filepath.Join(os.Getenv("APPDATA"), name)
+	if err := testAndCreateDir(appDataDir); err == nil {
+		DataDir = appDataDir
+		return nil
+	}
+
+	// 最后选择：TEMP
+	tempDir := filepath.Join(os.TempDir(), name)
+	if err := testAndCreateDir(tempDir); err == nil {
+		DataDir = tempDir
+		return nil
+	}
+
+	return fmt.Errorf("无法确定数据目录：所有位置都无法写入")
+}
+
+// testAndCreateDir 测试目录是否可以写入，如果不存在则创建
+func testAndCreateDir(dir string) error {
+	// 如果目录不存在，尝试创建
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+
+	// 测试写权限：创建临时文件
+	testFile := filepath.Join(dir, ".write_test")
+	f, err := os.Create(testFile)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	os.Remove(testFile)
+	return nil
+}
 
 type Config struct {
 	Static    bool   `json:"-"` // 是否启用静态配置（不生成外置文件，也不监控）
@@ -49,12 +107,8 @@ func LoadConfig(isStatic bool) (*Config, error) {
 		return c, nil
 	}
 
-	// 确定外置配置路径
-	exe, err := os.Executable()
-	if err != nil {
-		return c, nil
-	}
-	c.dir = filepath.Dir(exe)
+	// 使用全局数据目录
+	c.dir = DataDir
 	c.path = filepath.Join(c.dir, "config.json")
 
 	// 外置配置覆盖
@@ -135,11 +189,32 @@ func (c *Config) Save() {
 	data, _ := json.MarshalIndent(c, "", "  ")
 	c.mu.Unlock()
 
-	os.WriteFile(c.path, data, 0644)
+	// 使用原子写入：写入临时文件后重命名，避免部分写入问题
+	tmpPath := c.path + ".tmp"
+	err := os.WriteFile(tmpPath, data, 0644)
+	if err != nil {
+		log.Printf("Failed to write config to temp file: %v", err)
+		c.mu.Lock()
+		c.saving = false
+		c.mu.Unlock()
+		return
+	}
 
-	// 500ms 后清除标记，避免触发文件监控
+	// 原子重命名
+	err = os.Rename(tmpPath, c.path)
+	if err != nil {
+		log.Printf("Failed to rename config file: %v", err)
+		os.Remove(tmpPath)
+		c.mu.Lock()
+		c.saving = false
+		c.mu.Unlock()
+		return
+	}
+
+	// 延迟后清除标记，避免触发文件监控
 	go func() {
-		// Windows 下文件写入可能有延迟
+		// Windows 下文件写入可能有延迟，延迟时间更长以保证同步
+		time.Sleep(time.Millisecond * 500)
 		c.mu.Lock()
 		c.saving = false
 		c.mu.Unlock()
