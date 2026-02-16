@@ -32,7 +32,7 @@ func DetermineDataDir() error {
 
 	// 优先选择：程序目录
 	if err := testAndCreateDir(exeDir); err == nil {
-		DataDir = filepath.Dir(exeDir)
+		DataDir = exeDir
 		return nil
 	}
 
